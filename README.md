@@ -1,6 +1,8 @@
 # get_thread_stack
 通过process pid获取java程序占用CPU较高的线程栈
 
+默认执行3分钟, 当有线程CPU占用超过指定数值，会在当前目录下生成thread.log
+
 ```
 使用方法: 
 usage: Get thread stack [-h] [-c cpu] [-d command] [-t trace_time] [-p pid]
