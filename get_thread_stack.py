@@ -2,7 +2,7 @@
 import subprocess, sys, re, time, argparse, os.path
 
 def get_thread_id(pid):
-    command = "top -H -p %s -n 1 |grep java | head -5 | awk '{print $2,$10}'" % (pid)
+    command = "top -H -p %s -n 1 |grep java | head -10 | awk '{print $2,$10}'" % (pid)
     stdin, stdout = subprocess.getstatusoutput(command)
     stdout = stdout.replace("\x1b(B\x1b[m",'')
     pid_list = stdout.split("\n")
@@ -62,7 +62,7 @@ def main():
     jstack_data = jstack_data.split("\n")
     for i in result:
         nid = i["nid"]
-        pattern = re.compile("nid=0x{}".format(nid))
+        pattern = re.compile(" nid=0x{} ".format(nid))
         x = 1
         for data in jstack_data:
             if x == 1:
