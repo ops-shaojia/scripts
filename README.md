@@ -1,7 +1,7 @@
 # get_thread_stack
 通过process pid获取java程序占用CPU较高的线程栈
 
-默认执行3分钟, 当有线程CPU占用超过指定数值，会在当前目录下生成thread.log
+默认执行30秒, 当有线程CPU占用超过指定数值，会在当前目录下生成java_thread_stack.log
 
 建议下载使用二进制程序, 这样即使系统中没有python环境也可以执行
 
