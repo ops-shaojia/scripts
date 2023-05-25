@@ -5,11 +5,11 @@
 
 建议下载使用二进制程序, 这样即使系统中没有python环境也可以执行
 
-工具依赖top、jstack命令, jstack命令默认使用$PATH
+工具依赖ps, grep, awk, jstack, printf命令, jstack命令默认使用$PATH
 
 ```
 使用方法: 
-./get_thread --help
+./get_java_thread_stack --help
 usage: Get thread stack [-h] [-c cpu] [-d command] [-t trace_time] [-p pid]
 
 optional arguments:
