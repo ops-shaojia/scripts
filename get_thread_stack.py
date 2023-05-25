@@ -1,5 +1,11 @@
 # -*- coding:utf-8 -*-
-import subprocess, sys, re, time, argparse, os.path
+import sys
+import re
+import time
+import argparse
+import subprocess
+import os.path
+
 
 def get_thread_id(pid):
     command = "top -H -p %s -n 1 |grep java | head -10 | awk '{print $2,$10}'" % (pid)
@@ -43,14 +49,14 @@ def get_jstack_data(pid):
         return False
 
 def write_thread_jstack(msg):
-    with open("thread.log", 'a+') as f:
+    with open("java_thread_stack.log", 'a+') as f:
         f.write(msg + "\n")
 
 def Parser():
     parser = argparse.ArgumentParser(prog="Get thread stack", add_help=True)
     parser.add_argument("-c", "--cpu", dest="cpu", action="store", type=int, help="Thread cpu. Default gt 10 percentage", metavar="cpu", default=10)
     parser.add_argument("-d", "--command", dest="command", action="store", type=str, help="Jstack command path. Default $PATH", metavar="command")
-    parser.add_argument("-t", "--time", dest="trace_time", action="store", type=int, help="Trace time. Default 3min", metavar="trace_time", default=3)
+    parser.add_argument("-t", "--time", dest="trace_time", action="store", type=int, help="Trace time. Default 30second", metavar="trace_time", default=30)
     parser.add_argument("-p", "--pid", dest="pid", action="store", type=int, help="process pid", metavar="pid")
     return parser
 
@@ -68,7 +74,7 @@ def main():
             if x == 1:
                 m = pattern.findall(data)
                 if m:
-                    content = "time: {}\npid: {}\nthread cpu: {}%\nthread nid: {}\n{}".format(i["time"], i["pid"], i["cpu"], nid, data)
+                    content = "time: {}\npid: {}\nthread cpu: {}%\nthread nid: 0x{}\n{}".format(i["time"], i["pid"], i["cpu"], nid, data)
                     write_thread_jstack("----------------------------------------------------------------------------------------")
                     write_thread_jstack(content)
                     x += 1
@@ -86,7 +92,7 @@ def main():
 if __name__ == '__main__':
     parser = Parser()
     option = parser.parse_args()
-    t = int(option.trace_time) * 60
+    t = int(option.trace_time)
     cpu = int(option.cpu)
     if option.command:
         if os.path.isfile(option.command):
