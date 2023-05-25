@@ -7,37 +7,30 @@ import subprocess
 import os.path
 
 
-def get_thread_id(pid):
-    command = "top -H -p %s -n 1 |grep java | head -10 | awk '{print $2,$10}'" % (pid)
+def get_process_threads(pid):
+    command = "ps aux -L %s |grep java|grep ' %s ' | awk '{print $1,$2,$3,$4,$6,$12}'" % (pid, pid)
     stdin, stdout = subprocess.getstatusoutput(command)
-    stdout = stdout.replace("\x1b(B\x1b[m", '')
-    pid_list = stdout.split("\n")
-    result = []
-    t = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    for i in pid_list:
-        pattern = re.compile("\d+")
-        m = pattern.findall(i)
-        if m:
-            pass
-        else:
-            continue
-        data = i.split(" ")
-        thread_pid = data[0]
-        m = pattern.findall(data[1])
-        if m:
-            pass
-        else:
-            continue
-        thread_used_cpu = float(data[1])
-        if thread_used_cpu > cpu:
-            pass
-        else:
-            continue
-        get_nid_command = 'printf "%x\n" {}'.format(thread_pid)
-        stdin, stdout = subprocess.getstatusoutput(get_nid_command)
-        if stdin == 0:
-            result.append({"cpu": thread_used_cpu, "nid": stdout, "time": t, "pid": thread_pid})
-    return result
+    if stdin != 0:
+        return []
+    result = stdout.split("\n")
+    threads = []
+    ps_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    for thread in result:
+        t = thread.split(" ")
+        cmd = 'printf "%x\n" {}'.format(t[2])
+        stdin, stdout = subprocess.getstatusoutput(cmd)
+        if stdin == 0 and float(t[3]) > 50:
+            threads.append({
+                "time": ps_time,
+                "user": t[0],
+                "pid": t[1],
+                "LWP": t[2],
+                "cpu": t[3],
+                "memory": t[4],
+                "run_time": t[5],
+                "nid": f"0x{stdout}"
+            })
+    return threads
 
 def get_jstack_data(pid):
     command = "{} -l {}".format(command_path, pid)
@@ -62,22 +55,23 @@ def Parser():
 
 def main():
     jstack_data = get_jstack_data(pid)
-    if jstack_data == False:
+    if not jstack_data:
         return
-    result = get_thread_id(pid)
+    threads = get_process_threads(pid)
     jstack_data = jstack_data.split("\n")
-    for i in result:
-        nid = i["nid"]
-        pattern = re.compile(" nid=0x{} ".format(nid))
-        x = 1
+    for thread in threads:
+        nid = thread["nid"]
+        i = 1
         for data in jstack_data:
-            if x == 1:
+            if i == 1:
+                pattern = re.compile(" nid={} ".format(nid))
                 m = pattern.findall(data)
                 if m:
-                    content = "time: {}\npid: {}\nthread cpu: {}%\nthread nid: 0x{}\n{}".format(i["time"], i["pid"], i["cpu"], nid, data)
-                    write_thread_jstack("----------------------------------------------------------------------------------------")
+                    print(".", end="")
+                    content = f"Time: {thread['time']}\nProcess running user: {thread['user']}\nProcess pid: {thread['pid']}\nProcess mem: {thread['memory']}%\nThread running time: {thread['run_time']}\nThread LWP: {thread['LWP']}\nThread cpu: {thread['cpu']}%\nThread nid: {thread['nid']}\n{data}"
+                    write_thread_jstack("=====================================================================================================================================")
                     write_thread_jstack(content)
-                    x += 1
+                    i += 1
                     continue
                 else:
                     continue
@@ -87,7 +81,7 @@ def main():
                 break
             else:
                 write_thread_jstack(data)
-            x += 1
+            i += 1
 
 if __name__ == '__main__':
     parser = Parser()
@@ -103,6 +97,6 @@ if __name__ == '__main__':
     else:
         command_path = "jstack"
     pid = option.pid
-    for i  in range(t):
+    for i in range(t):
         main()
         time.sleep(1)
