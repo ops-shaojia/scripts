@@ -18,6 +18,6 @@ optional arguments:
   -d command, --command command
                         Jstack command path. Default $PATH
   -t trace_time, --time trace_time
-                        Trace time. Default 3min
+                        Trace time. Default 30second
   -p pid, --pid pid     process pid
 ```
