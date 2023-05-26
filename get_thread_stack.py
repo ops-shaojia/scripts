@@ -67,7 +67,7 @@ def main():
                 pattern = re.compile(" nid={} ".format(nid))
                 m = pattern.findall(data)
                 if m:
-                    print(".", end="")
+                    print(".", end="", flush=True)
                     content = f"Time: {thread['time']}\nProcess running user: {thread['user']}\nProcess pid: {thread['pid']}\nProcess mem: {thread['memory']}%\nThread running time: {thread['run_time']}\nThread LWP: {thread['LWP']}\nThread cpu: {thread['cpu']}%\nThread nid: {thread['nid']}\n{data}"
                     write_thread_jstack("=====================================================================================================================================")
                     write_thread_jstack(content)
