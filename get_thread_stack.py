@@ -1,102 +1,132 @@
 # -*- coding:utf-8 -*-
-import sys
 import re
 import time
 import argparse
 import subprocess
-import os.path
+import sys
 
+def analysis_stack(data):
+    stack_dict = {}
+    nid = ""
+    content = ""
+    lastnid = ""
+    for i in data.split("\n"):
+        pattern1 = re.compile('^".*"')
+        pattern2 = re.compile(" os_prio=[0-9a-zA-Z]{1,} ")
+        pattern3 = re.compile(" tid=[0-9a-zA-Z]{1,} ")
+        pattern4 = re.compile(" nid=[0-9a-zA-Z]{1,} ")
+        result1 = pattern1.findall(i)
+        if result1:
+            if lastnid != "":
+                stack_dict[lastnid]["content"] = content
+            nid = pattern4.findall(i)[0].strip()
+            stack_dict[nid] = {
+                "thread_name": result1[0].strip(),
+                "os_prio": pattern2.findall(i)[0].strip(),
+                "tid": pattern3.findall(i)[0].strip(),
+                "nid": nid
+            }
+            content = i
+            lastnid = nid
+            continue
+        pattern5 = re.compile("java.lang.Thread.State: ([a-zA-Z0-9]{1,})")
+        result5 = pattern5.findall(i)
+        if result5:
+            stack_dict[nid]["thread_state"] = result5[0]
+        pattern6 = re.compile("JNI global references: ([0-9]{1,})")
+        jni_global_references = pattern6.findall(i)
+        if jni_global_references:
+            stack_dict["JNI_global_references"] = jni_global_references[0]
+        else:
+            content += f"\n{i}"
+    stack_dict[lastnid]["content"] = content
+    return stack_dict
 
 def get_process_threads(pid):
-    command = "ps aux -L %s |grep java|grep ' %s ' | awk '{print $1,$2,$3,$4,$6,$12}'" % (pid, pid)
+    command = "top -H -p %s -n 1 -b" % (pid)
+    thread_data = execute_command(command)
+    stack_command = "{} -l {}".format(command_path, pid)
+    stack_stdout = execute_command(stack_command)
+    return thread_data, stack_stdout
+
+def execute_command(command):
     stdin, stdout = subprocess.getstatusoutput(command)
     if stdin != 0:
-        return []
-    result = stdout.split("\n")
-    threads = []
-    ps_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    for thread in result:
-        t = thread.split(" ")
-        cmd = 'printf "%x\n" {}'.format(t[2])
-        stdin, stdout = subprocess.getstatusoutput(cmd)
-        if stdin == 0 and float(t[3]) > 50:
-            threads.append({
-                "time": ps_time,
-                "user": t[0],
-                "pid": t[1],
-                "LWP": t[2],
-                "cpu": t[3],
-                "memory": t[4],
-                "run_time": t[5],
-                "nid": f"0x{stdout}"
-            })
-    return threads
+        raise Exception(f"command: {command}执行异常, 状态码'{stdin}' 错误输出: {stdout}")
+    return stdout
 
-def get_jstack_data(pid):
-    command = "{} -l {}".format(command_path, pid)
-    stdin, stdout = subprocess.getstatusoutput(command)
-    if stdin == 0:
-        return stdout
-    else:
-        print(stdout)
-        return False
-
-def write_thread_jstack(msg):
+def write(msg):
     with open("java_thread_stack.log", 'a+') as f:
         f.write(msg + "\n")
 
 def Parser():
     parser = argparse.ArgumentParser(prog="Get thread stack", add_help=True)
-    parser.add_argument("-c", "--cpu", dest="cpu", action="store", type=int, help="Thread cpu. Default gt 10 percentage", metavar="cpu", default=10)
-    parser.add_argument("-d", "--command", dest="command", action="store", type=str, help="Jstack command path. Default $PATH", metavar="command")
-    parser.add_argument("-t", "--time", dest="trace_time", action="store", type=int, help="Trace time. Default 30second", metavar="trace_time", default=30)
+    parser.add_argument("-d", "--command", dest="command", action="store", default="jstack", type=str, help="Jstack command path. Default $PATH", metavar="command")
     parser.add_argument("-p", "--pid", dest="pid", action="store", type=int, help="process pid", metavar="pid")
     return parser
-
-def main():
-    jstack_data = get_jstack_data(pid)
-    if not jstack_data:
-        return
-    threads = get_process_threads(pid)
-    jstack_data = jstack_data.split("\n")
-    for thread in threads:
-        nid = thread["nid"]
-        i = 1
-        for data in jstack_data:
-            if i == 1:
-                pattern = re.compile(" nid={} ".format(nid))
-                m = pattern.findall(data)
-                if m:
-                    print(".", end="", flush=True)
-                    content = f"Time: {thread['time']}\nProcess running user: {thread['user']}\nProcess pid: {thread['pid']}\nProcess mem: {thread['memory']}%\nThread running time: {thread['run_time']}\nThread LWP: {thread['LWP']}\nThread cpu: {thread['cpu']}%\nThread nid: {thread['nid']}\n{data}"
-                    write_thread_jstack("=====================================================================================================================================")
-                    write_thread_jstack(content)
-                    i += 1
-                    continue
-                else:
-                    continue
-            sec_pattern = re.compile('^".*')
-            m = sec_pattern.findall(data)
-            if m:
-                break
-            else:
-                write_thread_jstack(data)
-            i += 1
 
 if __name__ == '__main__':
     parser = Parser()
     option = parser.parse_args()
-    t = int(option.trace_time)
-    cpu = int(option.cpu)
-    if option.command:
-        if os.path.isfile(option.command):
-            command_path = option.command
-        else:
-            print("jstack command not found.")
-            sys.exit(1)
-    else:
-        command_path = "jstack"
+    command_path = option.command
     pid = option.pid
-    for i in range(t):
-        main()
-        time.sleep(1)
+    if pid == "" or pid is None:
+        parser.print_help()
+        sys.exit(1)
+    data = {}
+    # 连续获取3次线程堆栈, 间隔3秒
+    for i in range(3):
+        top_dash, stack_data = get_process_threads(pid)
+        with open("source.log", "a+") as f:
+            f.write(f"{stack_data}\n\n\n{top_dash}\n\n\n")
+        data[f"{i}"] = {
+            "top_dash": top_dash,
+            "stack": stack_data
+        }
+        time.sleep(3)
+    # 分析java栈的cpu使用情况
+    for i in range(3):
+        thread_stacks = analysis_stack(data[f"{i}"]["stack"])
+        process_ids = []
+        result = execute_command("echo '%s' | grep java | awk '{print $1,$2,$9,$10,$11}'" % data[f"{i}"]["top_dash"])
+        # 解析top命令的输出内容
+        for d in result.split("\n"):
+            t = d.split(" ")
+            cmd = 'printf "%x\n" {}'.format(t[0])
+            stdout = execute_command(cmd)
+            cpu = float(t[2])
+            if cpu > 0:
+                process_ids.append({
+                    "user": t[1],
+                    "pid": t[0],
+                    "cpu": cpu,
+                    "memory": t[3],
+                    "run_time": t[4],
+                    "nid": f"0x{stdout.strip()}"
+                })
+        write(f"第{i + 1}次java线程堆栈分析结果: ")
+        threads = len(thread_stacks.keys()) - 1
+        write(f"线程数量: {threads}")
+        write(f"引用对象: {thread_stacks['JNI_global_references']}个")
+        thread_states = {}
+        unknown_thread = 0
+        for nid in thread_stacks.keys():
+            if nid == "JNI_global_references":
+                continue
+            if "thread_state" in thread_stacks[nid]:
+                if thread_stacks[nid]["thread_state"] not in thread_states:
+                    thread_states[thread_stacks[nid]["thread_state"]] = 1
+                else:
+                    thread_states[thread_stacks[nid]["thread_state"]] += 1
+            else:
+                unknown_thread += 1
+        for x in thread_states.keys():
+            write(f"{x}线程: {thread_states[x]}个")
+        write(f"其他线程: {unknown_thread}个\n\n")
+        for process_id in process_ids:
+            for nid in thread_stacks.keys():
+                if f"nid={process_id['nid']}" == nid:
+                    print(".", end="", flush=True)
+                    log = f"运行用户: {process_id['user']}\n线程PID: {process_id['pid']}\n内存使用率: {process_id['memory']}%\n线程运行时间: {process_id['run_time']}\nCPU使用率: {process_id['cpu']}%\nNative nid: {process_id['nid']}\n\n\n{thread_stacks[nid]['content']}\n"
+                    write(log)
+                    write("=====================================================================================================================================")
