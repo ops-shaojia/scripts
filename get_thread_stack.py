@@ -95,15 +95,14 @@ if __name__ == '__main__':
             cmd = 'printf "%x\n" {}'.format(t[0])
             stdout = execute_command(cmd)
             cpu = float(t[2])
-            if cpu > 0:
-                process_ids.append({
-                    "user": t[1],
-                    "pid": t[0],
-                    "cpu": cpu,
-                    "memory": t[3],
-                    "run_time": t[4],
-                    "nid": f"0x{stdout.strip()}"
-                })
+            process_ids.append({
+                "user": t[1],
+                "pid": t[0],
+                "cpu": cpu,
+                "memory": t[3],
+                "run_time": t[4],
+                "nid": f"0x{stdout.strip()}"
+            })
         write(f"第{i + 1}次java线程堆栈分析结果: ")
         threads = len(thread_stacks.keys()) - 1
         write(f"线程数量: {threads}")
